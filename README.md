@@ -82,7 +82,7 @@ The `+epi0` directory name must be kept unchanged because the leading `+` define
 
 The current pipeline requires:
 
-- MATLAB
+- MATLAB R2025b
 - Image Processing Toolbox functions used by the pipeline, including DICOM and NIfTI I/O
 - Parallel Computing Toolbox *(optional)*
 
