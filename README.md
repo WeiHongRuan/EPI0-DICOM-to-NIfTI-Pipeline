@@ -206,24 +206,6 @@ If topup distortion correction is used, additional forward and reverse EPI refer
 
 ---
 
-## Relationship to fMRI Training at The University of Queensland
-
-The downstream fMRI preprocessing workflow was introduced as part of my laboratory academic visit and small-animal fMRI training at **The University of Queensland (UQ), Australia**.
-
-During the training, I learned rodent fMRI acquisition and preprocessing procedures in a Linux-based neuroimaging environment, including workflows involving tools such as:
-
-- FSL
-- AFNI
-- ANTs
-
-The workflow and processing concepts learned during this training were subsequently transferred to our home laboratory and adapted to our own rodent fMRI datasets.
-
-This MATLAB repository was developed to automate the **data-preparation stage preceding the downstream fMRI preprocessing workflow**, particularly the conversion and organization of raw EPI DICOM data into the `EPI0.nii` format required for subsequent processing.
-
-> **Note:** The linked `rodent-whole-brain-preprocessing-recipe` repository is maintained by the **GT-Emory MIND Lab**. The reference to The University of Queensland describes the context in which I received training in the preprocessing workflow; it does not indicate that the linked repository is maintained by UQ.
-
----
-
 ## Configuration
 
 Most user-adjustable parameters are stored in:
