@@ -54,6 +54,93 @@ Completed steps are detected where possible, allowing the pipeline to resume aft
 
 ---
 
+## fMRI Acquisition and EPI Data Structure
+
+For the dataset used to develop this pipeline, each fMRI EPI acquisition contains:
+
+- **9000 DICOM images in total**
+- **15 slices per time point**
+- **600 time points in total**
+
+The number of acquired time points is therefore:
+
+```text
+9000 DICOM images ÷ 15 slices per time point
+= 600 time points
+```
+
+Before the DICOM-to-NIfTI conversion step, the pipeline automatically removes the first **100 fMRI time points**.
+
+Since each time point contains 15 slices:
+
+```text
+100 time points × 15 slices per time point
+= 1500 DICOM images
+```
+
+Accordingly, the pipeline removes the following files from the beginning of the EPI DICOM series:
+
+```text
+MRIm1 – MRIm1500
+```
+
+This corresponds to removing:
+
+```text
+100 / 600 time points
+```
+
+from the beginning of the acquisition.
+
+After the initial 100 time points are removed, the remaining dataset contains:
+
+```text
+600 - 100 = 500 time points
+```
+
+and:
+
+```text
+500 time points × 15 slices
+= 7500 DICOM images
+```
+
+Therefore, the data passed to the subsequent DICOM-to-NIfTI conversion step consist of:
+
+- **7500 remaining DICOM images**
+- **15 slices per time point**
+- **500 remaining fMRI time points**
+
+The data flow is:
+
+```text
+Original EPI acquisition
+9000 DICOM images
+600 time points
+15 slices / time point
+        ↓
+Remove first 100 time points
+        ↓
+Remove MRIm1 – MRIm1500
+1500 DICOM images removed
+        ↓
+Remaining EPI data
+7500 DICOM images
+500 time points
+        ↓
+DICOM-to-NIfTI conversion
+        ↓
+Spatial metadata adjustment
+        ↓
+EPI0.nii
+        ↓
+Downstream rodent fMRI preprocessing
+```
+
+> **Dataset-specific note:** The values above are based on the acquisition protocol used for the dataset for which this pipeline was developed. If another dataset contains a different number of slices per time point, acquisition length, or number of initial time points to be removed, the deletion range in `+epi0/defaultConfig.m` must be adjusted accordingly.
+
+---
+
 ## Repository Structure
 
 ```text
@@ -80,9 +167,9 @@ The `+epi0` directory name must be kept unchanged because the leading `+` define
 
 ### EPI0 Preparation Pipeline
 
-The current pipeline requires:
+The current pipeline was developed and tested using:
 
-- MATLAB R2025b
+- **MATLAB R2025b**
 - Image Processing Toolbox functions used by the pipeline, including DICOM and NIfTI I/O
 - Parallel Computing Toolbox *(optional)*
 
@@ -127,7 +214,26 @@ Before processing a new dataset, review:
 +epi0/defaultConfig.m
 ```
 
-The configuration file controls several dataset-specific parameters, including the DICOM deletion range, spatial scaling, destination organization, and parallel processing settings.
+The configuration file controls several dataset-specific parameters, including:
+
+- DICOM deletion range
+- spatial scaling
+- destination organization
+- parallel processing settings
+
+For the current dataset, the default deletion range removes:
+
+```text
+MRIm1 – MRIm1500
+```
+
+which corresponds to the first:
+
+```text
+100 fMRI time points
+```
+
+because each time point contains 15 slices.
 
 ---
 
@@ -152,6 +258,7 @@ Because the workflow includes file deletion and file movement, make sure that:
 - the correct dataset has been selected;
 - the original data have been backed up;
 - the configured deletion range is correct;
+- the number of slices per time point matches the expected acquisition protocol;
 - the directory structure matches the expected organization.
 
 ---
@@ -165,6 +272,8 @@ EPI0.nii
 ```
 
 before proceeding to downstream preprocessing.
+
+For the acquisition protocol described above, the resulting functional dataset should contain **500 remaining time points** after removal of the first 100 time points.
 
 ---
 
@@ -186,9 +295,16 @@ The relationship between the two repositories is:
 
 ```text
 Raw DICOM EPI data
+9000 images / 600 time points
         ↓
 EPI0-DICOM-to-NIfTI-Pipeline
 (this repository)
+        ↓
+Remove first 100 time points
+        ↓
+7500 images / 500 time points
+        ↓
+DICOM-to-NIfTI conversion
         ↓
 EPI0.nii
         ↓
@@ -206,6 +322,24 @@ If topup distortion correction is used, additional forward and reverse EPI refer
 
 ---
 
+## Relationship to fMRI Training at The University of Queensland
+
+The downstream fMRI preprocessing workflow was introduced as part of my laboratory academic visit and small-animal fMRI training at **The University of Queensland (UQ), Australia**.
+
+During the training, I learned rodent fMRI acquisition and preprocessing procedures in a Linux-based neuroimaging environment, including workflows involving tools such as:
+
+- FSL
+- AFNI
+- ANTs
+
+The workflow and processing concepts learned during this training were subsequently transferred to our home laboratory and adapted to our own rodent fMRI datasets.
+
+This MATLAB repository was developed to automate the **data-preparation stage preceding the downstream fMRI preprocessing workflow**, particularly the organization of raw EPI DICOM data, removal of the predefined initial time points, DICOM-to-NIfTI conversion, and preparation of the final `EPI0.nii` file.
+
+> **Note:** The linked `rodent-whole-brain-preprocessing-recipe` repository is maintained by the **GT-Emory MIND Lab**. The reference to The University of Queensland describes the context in which I received training in the preprocessing workflow; it does not indicate that the linked repository is maintained by UQ.
+
+---
+
 ## Configuration
 
 Most user-adjustable parameters are stored in:
@@ -219,8 +353,8 @@ Current defaults include:
 | Parameter | Default | Purpose |
 |---|---:|---|
 | `LargeFolderThreshold` | `2000` | Minimum direct-file count used by the source-folder selection logic |
-| `DeleteFirstIndex` | `1` | First indexed DICOM file considered for deletion |
-| `DeleteLastIndex` | `1500` | Last indexed DICOM file considered for deletion |
+| `DeleteFirstIndex` | `1` | First DICOM image removed from the EPI series |
+| `DeleteLastIndex` | `1500` | Last DICOM image removed; corresponds to the first 100 fMRI time points for the current dataset (100 time points × 15 slices) |
 | `ScaleFactor` | `10` | Spatial scaling factor applied to NIfTI metadata |
 | `MaximumDestinationFiles` | `5` | Maximum number of destination assignments |
 | `UseParallel` | `true` | Enables parallel processing when available |
@@ -232,38 +366,91 @@ The default destination suffixes are:
 {'0-1X', '0-2X', '4X', '5X', '6X'}
 ```
 
+For the current acquisition:
+
+```text
+DeleteFirstIndex = 1
+DeleteLastIndex  = 1500
+```
+
+means that the pipeline removes:
+
+```text
+1500 DICOM images
+÷ 15 slices per time point
+= 100 time points
+```
+
+leaving:
+
+```text
+500 time points
+7500 DICOM images
+```
+
+for subsequent conversion and preprocessing.
+
 Review these values before using the pipeline on a new dataset.
 
 ---
 
 ## Dataset-Specific Assumptions
 
-This code was developed for a particular EPI dataset organization.
+This code was developed for a particular EPI dataset organization and acquisition protocol.
 
 In particular:
 
+- Each EPI acquisition contains **9000 DICOM images**.
+- Each fMRI time point contains **15 slices**.
+- Each acquisition therefore contains **600 time points**.
+- The first **100 time points** are removed before DICOM-to-NIfTI conversion.
+- Removing 100 time points corresponds to deleting the first **1500 DICOM images**.
+- The remaining dataset contains **500 time points / 7500 DICOM images**.
 - DICOM source files are expected to use names beginning with `MRIm` followed by an index.
-- Source folders are detected using a dataset-specific naming convention implemented in:
+
+Source folders are detected using a dataset-specific naming convention implemented in:
 
 ```text
 +epi0/discoverSourceFolders.m
 ```
 
-- Destination assignment rules are implemented in:
+Destination assignment rules are implemented in:
 
 ```text
 +epi0/buildDestinationAssignments.m
 ```
 
-- The DICOM deletion range is defined in:
+The DICOM deletion range is defined in:
 
 ```text
 +epi0/defaultConfig.m
 ```
 
-- Spatial scaling is performed according to the configured metadata adjustment rules.
+For the current dataset, this range is:
 
-If your dataset uses a different naming convention, directory structure, acquisition protocol, or preprocessing requirement, these modules should be reviewed and modified before running the pipeline.
+```text
+MRIm1 – MRIm1500
+```
+
+which corresponds specifically to the first 100 fMRI time points:
+
+```text
+100 time points × 15 slices = 1500 images
+```
+
+Spatial scaling is performed according to the configured metadata adjustment rules.
+
+If your dataset uses a different:
+
+- number of slices per time point;
+- number of acquired time points;
+- DICOM naming convention;
+- directory structure;
+- acquisition protocol;
+- number of initial time points to remove;
+- downstream preprocessing requirement;
+
+the relevant configuration and modules must be reviewed and modified before running the pipeline.
 
 The current default parameters should therefore **not be assumed to generalize automatically to other datasets**.
 
@@ -287,10 +474,12 @@ It is strongly recommended to:
 1. Keep an untouched backup of the original DICOM dataset.
 2. Work on a separate copy of the original data.
 3. Verify the deletion index range in `defaultConfig.m`.
-4. Confirm that the folder-naming rules match the dataset.
-5. Test the pipeline on a small copied dataset first.
-6. Inspect the generated `EPI0.nii` before downstream preprocessing.
-7. Verify the destination folders before moving the processed files.
+4. Confirm the number of slices per fMRI time point.
+5. Confirm that deleting 1500 images corresponds to the intended number of initial time points.
+6. Confirm that the folder-naming rules match the dataset.
+7. Test the pipeline on a small copied dataset first.
+8. Inspect the generated `EPI0.nii` before downstream preprocessing.
+9. Verify the destination folders before moving the processed files.
 
 Do **not** use the only available copy of the experimental dataset as the working directory.
 
@@ -330,6 +519,18 @@ Coordinates the complete EPI preparation workflow and generates the final proces
 
 Handles the dataset-specific removal of configured indexed DICOM files.
 
+For the current dataset, this step removes:
+
+```text
+MRIm1 – MRIm1500
+```
+
+corresponding to the first:
+
+```text
+100 fMRI time points
+```
+
 This step should be reviewed carefully before applying the pipeline to a new dataset.
 
 ---
@@ -342,6 +543,8 @@ Coordinates:
 - spatial metadata adjustment;
 - preparation of the final `EPI0.nii`.
 
+After the first 100 time points have been removed, the remaining 7500 DICOM images are passed to this stage.
+
 ---
 
 ### `convertDicomFolder.m`
@@ -349,6 +552,14 @@ Coordinates:
 Internal DICOM-to-NIfTI conversion implementation.
 
 Processes the remaining EPI DICOM data and generates the corresponding NIfTI dataset.
+
+For the current acquisition protocol, the converted functional series represents:
+
+```text
+500 remaining time points
+```
+
+after removal of the initial 100 time points.
 
 ---
 
@@ -385,19 +596,32 @@ A typical workflow is:
         ↓
 2. Create a separate working copy
         ↓
-3. Review defaultConfig.m
+3. Confirm:
+   9000 images
+   15 slices / time point
+   600 time points
         ↓
-4. Run this MATLAB EPI preparation pipeline
+4. Review defaultConfig.m
         ↓
-5. Inspect the generated EPI0.nii
+5. Run this MATLAB EPI preparation pipeline
         ↓
-6. Verify the destination folder organization
+6. Remove first 100 time points
+   = first 1500 DICOM images
         ↓
-7. Run the downstream rodent fMRI preprocessing workflow
+7. Retain 500 time points
+   = 7500 DICOM images
         ↓
-8. Inspect preprocessing quality
+8. Convert remaining DICOM data to NIfTI
         ↓
-9. Proceed with functional imaging analysis
+9. Inspect the generated EPI0.nii
+        ↓
+10. Verify the destination folder organization
+        ↓
+11. Run the downstream rodent fMRI preprocessing workflow
+        ↓
+12. Inspect preprocessing quality
+        ↓
+13. Proceed with functional imaging analysis
 ```
 
 The original DICOM dataset should remain unchanged throughout this process.
@@ -412,8 +636,13 @@ The role of this repository within the larger fMRI analysis workflow can be summ
 MRI acquisition
         ↓
 Raw EPI DICOM data
+9000 images
+600 time points
         ↓
-DICOM data preparation
+Remove initial 100 time points
+        ↓
+7500 images
+500 time points
         ↓
 DICOM-to-NIfTI conversion
         ↓
@@ -430,6 +659,10 @@ This repository primarily handles the stages from:
 
 ```text
 Raw EPI DICOM data
+        ↓
+Initial-volume removal
+        ↓
+DICOM-to-NIfTI conversion
         ↓
 EPI0.nii
 ```
@@ -458,7 +691,25 @@ This repository contains **code only**.
 
 No raw or processed experimental MRI data are included.
 
-The workflow was developed around a specific rodent MRI dataset organization and preprocessing procedure. Researchers using different acquisition protocols or directory structures should carefully review the configuration and relevant modules before applying the pipeline.
+The workflow was developed around a specific rodent MRI dataset organization, acquisition protocol, and preprocessing procedure.
+
+For the current dataset:
+
+```text
+Original acquisition:
+600 time points
+9000 DICOM images
+
+Initial data removed:
+100 time points
+1500 DICOM images
+
+Data retained:
+500 time points
+7500 DICOM images
+```
+
+Researchers using different acquisition protocols or directory structures should carefully review the configuration and relevant modules before applying the pipeline.
 
 All generated results should be visually and quantitatively inspected before proceeding with downstream analysis.
 
